@@ -1,6 +1,6 @@
-import bcrypt from 'bcryptjs';
-import { User } from '../models/user.model.js';
-import { signToken } from '../utils/jwt.js';
+import bcrypt from "bcryptjs";
+import { User } from "../models/user.model.js";
+import { signToken } from "../utils/jwt.js";
 
 /**
  * TODO: Register a new user
@@ -14,6 +14,19 @@ import { signToken } from '../utils/jwt.js';
 export async function register(req, res, next) {
   try {
     // Your code here
+    const { name, email, password} = req.body;
+    const role = req.body.role || 'user'
+    const existing = await User.findOne({ email });
+    if (existing)
+      return res
+        .status(409)
+        .json({ error: { message: "Email already exists" } });
+    const user = await new User({ name, email, password, role });
+    await user.save();
+    const userObj = user.toObject();
+    delete userObj.password;
+    return res.status(201).json({ user: userObj });
+    next();
   } catch (error) {
     next(error);
   }
@@ -33,6 +46,26 @@ export async function register(req, res, next) {
 export async function login(req, res, next) {
   try {
     // Your code here
+    const { email, password } = req.body;
+    const user = await User.findOne({ email }).select("+password");
+    // console.log(user)
+
+    if (!user)
+      return res
+        .status(401)
+        .json({ error: { message: "Invalid credentials" } });
+    const userObj = user.toObject();
+    if (!(await bcrypt.compare(password, userObj.password)))
+      return res
+        .status(401)
+        .json({ error: { message: "Invalid credentials" } });
+    const token = signToken({
+      userId: userObj._id,
+      email: userObj.email,
+      role: userObj.role,
+    });
+    delete userObj.password;
+    return res.status(200).json({ token: token, user: userObj });
   } catch (error) {
     next(error);
   }
@@ -46,6 +79,7 @@ export async function login(req, res, next) {
  */
 export async function me(req, res, next) {
   try {
+    return res.status(200).json({ user: req.user });
     // Your code here
   } catch (error) {
     next(error);
